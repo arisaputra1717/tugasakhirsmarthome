@@ -210,6 +210,9 @@ exports.checkRecommendation = async (req, res) => {
 // ===============================================================
 // TOGGLE (ON / OFF) — lengkap
 // ===============================================================
+// ==========================
+// GANTI fungsi toggle berikut ke controllers/perangkatController.js
+// ==========================
 exports.toggle = async (req, res) => {
   console.log("🔥 TOGGLE dipanggil");
   const { id } = req.params;
@@ -218,7 +221,9 @@ exports.toggle = async (req, res) => {
   try {
     const perangkat = await Perangkat.findByPk(id);
     if (!perangkat)
-      return res.status(404).json({ success: false, message: "Perangkat tidak ditemukan" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Perangkat tidak ditemukan" });
 
     const state = String(status).toUpperCase();
     if (!["ON", "OFF"].includes(state))
@@ -229,6 +234,8 @@ exports.toggle = async (req, res) => {
 
     // ================= ON =================
     if (state === "ON") {
+      console.log(`➡️ Request -> ON : ${perangkat.nama_perangkat} (${perangkat.id})`);
+
       const rekomendasi = await cekBebanPuncak(perangkat.daya_watt);
       if (!rekomendasi.rekomendasi.bisaLangsung && !confirm) {
         return res.json({
@@ -239,8 +246,31 @@ exports.toggle = async (req, res) => {
         });
       }
 
+      // attempt publish to device if topic exists; if fails => rollback / respond error
+      let publishedOk = false;
+      if (perangkat.topik_kontrol) {
+        try {
+          // publishKontrol mungkin sync atau async -> wrap dengan Promise.resolve
+          await Promise.resolve(publishKontrol(perangkat.topik_kontrol, "ON"));
+          publishedOk = true;
+          console.log(`✅ publishKontrol ON success -> ${perangkat.topik_kontrol}`);
+        } catch (pubErr) {
+          console.error(`❌ publishKontrol ON failed for ${perangkat.nama_perangkat}:`, pubErr.message || pubErr);
+          // Kembalikan error ke UI, jangan ubah status DB
+          return res.status(500).json({
+            success: false,
+            message: "Gagal mengirim perintah ke perangkat (MQTT). Cek log server.",
+            error: pubErr.message || String(pubErr),
+          });
+        }
+      } else {
+        // tidak ada topik kontrol -> tetap update DB (as before)
+        publishedOk = true;
+        console.warn(`⚠️ Perangkat "${perangkat.nama_perangkat}" tidak punya topik_kontrol — update status hanya di DB`);
+      }
+
+      // update status di DB setelah publish berhasil (atau tidak butuh topik_kontrol)
       await perangkat.update({ status: "ON" });
-      if (perangkat.topik_kontrol) publishKontrol(perangkat.topik_kontrol, "ON");
 
       const durasiMenit = Number(durasi || 0);
       if (durasiMenit > 0) {
@@ -264,7 +294,7 @@ exports.toggle = async (req, res) => {
         }
       }
 
-      // Pause perangkat lain bila perlu
+      // Pause perangkat lain bila perlu (tetap seperti semula) — ini men-trigger publish OFF juga
       if (confirm && rekomendasi.rekomendasi.perangkatPause?.length) {
         const now = moment().tz(TZ);
         const selesai = now.clone().add(Number(durasi || 0), "minutes");
@@ -272,8 +302,21 @@ exports.toggle = async (req, res) => {
         for (const p of rekomendasi.rekomendasi.perangkatPause) {
           const dev = await Perangkat.findByPk(p.id);
           if (dev && dev.status === "ON") {
+            // publish OFF ke masing-masing perangkat (tunggu result, tapi jangan gagalkan seluruh proses bila satu gagal)
+            try {
+              if (dev.topik_kontrol) {
+                await Promise.resolve(publishKontrol(dev.topik_kontrol, "OFF"));
+                console.log(`➡️ Pause: published OFF for ${dev.nama_perangkat}`);
+              } else {
+                console.warn(`⚠️ Pause target ${dev.nama_perangkat} tidak punya topik_kontrol`);
+              }
+            } catch (e) {
+              console.error(`❌ Gagal publish OFF untuk ${dev.nama_perangkat}:`, e.message || e);
+              // lanjutkan proses (jangan rollback)
+            }
+
+            // update status & AktivasiManual (sebagai Pause)
             await dev.update({ status: "OFF" });
-            if (dev.topik_kontrol) publishKontrol(dev.topik_kontrol, "OFF");
 
             const existingPause = await AktivasiManual.findOne({
               where: { perangkat_id: dev.id, jam_selesai: null },
@@ -314,6 +357,26 @@ exports.toggle = async (req, res) => {
 
     // ================= OFF =================
     if (state === "OFF") {
+      console.log(`➡️ Request -> OFF : ${perangkat.nama_perangkat} (${perangkat.id})`);
+
+      // publish OFF first (if topic exists). If publish gagal, respond error and do not change DB
+      if (perangkat.topik_kontrol) {
+        try {
+          await Promise.resolve(publishKontrol(perangkat.topik_kontrol, "OFF"));
+          console.log(`✅ publishKontrol OFF success -> ${perangkat.topik_kontrol}`);
+        } catch (pubErr) {
+          console.error(`❌ publishKontrol OFF failed for ${perangkat.nama_perangkat}:`, pubErr.message || pubErr);
+          return res.status(500).json({
+            success: false,
+            message: "Gagal mengirim perintah OFF ke perangkat (MQTT). Cek log server.",
+            error: pubErr.message || String(pubErr),
+          });
+        }
+      } else {
+        console.warn(`⚠️ Perangkat "${perangkat.nama_perangkat}" tidak punya topik_kontrol — update status hanya di DB`);
+      }
+
+      // update DB status and penjadwalan flags as before
       await perangkat.update({ status: "OFF" });
 
       if (perangkat.penjadwalan_aktif) {
@@ -326,8 +389,6 @@ exports.toggle = async (req, res) => {
           { where: { id: perangkat.id } }
         );
       }
-
-      if (perangkat.topik_kontrol) publishKontrol(perangkat.topik_kontrol, "OFF");
 
       const now = moment().tz(TZ);
       const lastAktivasi = await AktivasiManual.findOne({
