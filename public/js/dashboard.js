@@ -1,3 +1,4 @@
+// public/js/dashboard.js (REPLACE existing)
 let pendingDeviceId = null;
 let pendingCommand = null;
 
@@ -57,26 +58,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ====== Socket.IO ======
   const socket = io();
-// Update panel Kuota/Terpakai/Sisa secara realtime dari server (mqttClient.js emit 'durasi-update')
-socket.on("durasi-update", ({ id, durasi, kuota, persen }) => {
-  const durEl = document.getElementById(`durasi-${id}`);
-  const kuoEl = document.getElementById(`kuota-${id}`);
-  const sisEl = document.getElementById(`sisa-${id}`);
-  const barEl = document.getElementById(`durasi-bar-${id}`);
-
-  if (typeof kuota === "number" && kuoEl) kuoEl.textContent = kuota.toFixed(2);
-  if (typeof durasi === "number" && durEl) durEl.textContent = durasi.toFixed(2);
-  if (sisEl && (typeof kuota === "number") && (typeof durasi === "number")) {
-    const sisa = Math.max(0, kuota - durasi);
-    sisEl.textContent = sisa.toFixed(2);
-  }
-  if (barEl && typeof persen === "number") {
-    barEl.style.width = `${Math.min(100, Math.max(0, persen))}%`;
-  }
-});
 
   // Status perangkat
   socket.on("status-updated", ({ id, status }) => {
+    // Hapus status processing pada kartu ini (jika ada)
+    clearProcessingByDeviceId(id);
+
     updateButtonStatus(id, status);
     syncButtonStatusFromBadge();
   });
@@ -146,6 +133,9 @@ function updateButtonStatus(deviceId, status) {
 
     btnOn.disabled = status === "ON";
     btnOff.disabled = status === "OFF";
+
+    // Pastikan tombol yang sedang 'memproses' dikembalikan ke normal
+    clearProcessingByDeviceId(deviceId);
   }
 }
 
@@ -385,6 +375,42 @@ document
     }
   });
 
+// ====== Helpers processing state ======
+function setProcessingOnButton(btn, processing = true, text = "Memproses...") {
+  if (!btn) return;
+  if (processing) {
+    if (!btn.dataset.original) btn.dataset.original = btn.innerHTML;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> ${text}`;
+    btn.disabled = true;
+    // set processing flag at card level
+    const card = btn.closest(".card");
+    if (card) card.dataset.processing = "true";
+  } else {
+    // restore
+    if (btn.dataset.original) {
+      btn.innerHTML = btn.dataset.original;
+      delete btn.dataset.original;
+    } else {
+      // fallback
+      btn.innerHTML = btn.getAttribute("data-command") === "ON" ? '<i class="fas fa-power-off me-1"></i> ON' : '<i class="fas fa-power-off me-1"></i> OFF';
+    }
+    btn.disabled = false;
+    const card = btn.closest(".card");
+    if (card) delete card.dataset.processing;
+  }
+}
+
+function clearProcessingByDeviceId(deviceId) {
+  const card = document
+    .querySelector(`button[data-device-id="${deviceId}"]`)
+    ?.closest(".card");
+  if (!card) return;
+  card.querySelectorAll("button[data-device-id]").forEach((b) => {
+    // restore both buttons inside the card
+    setProcessingOnButton(b, false);
+  });
+}
+
 // ====== Kirim perintah ke server ======
 async function kirimPerintah(id, perintah) {
   const btn = document.querySelector(
@@ -392,15 +418,13 @@ async function kirimPerintah(id, perintah) {
   );
   if (!btn) return;
 
-  const originalContent = btn.innerHTML;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Memproses...';
-  btn.disabled = true;
+  // show processing only on the clicked button (and mark card)
+  setProcessingOnButton(btn, true);
 
   const waktu = getTanggalJamDariWaktuSekarang();
   if (!waktu) {
     alert("Waktu saat ini tidak tersedia atau format tidak valid.");
-    btn.innerHTML = originalContent;
-    btn.disabled = false;
+    setProcessingOnButton(btn, false);
     return;
   }
   const { tanggal, jamMenit } = waktu;
@@ -422,6 +446,9 @@ async function kirimPerintah(id, perintah) {
     }).then((res) => res.json());
 
     if (!cek.success) {
+      // clear processing (server refused)
+      setProcessingOnButton(btn, false);
+
       const rekom = cek.rekomendasi || {};
       let perangkatPauseList = "";
 
@@ -440,9 +467,6 @@ async function kirimPerintah(id, perintah) {
           `,
           icon: "error",
           confirmButtonText: "Tutup",
-        }).then(() => {
-          btn.innerHTML = originalContent;
-          btn.disabled = false;
         });
         return;
       }
@@ -484,23 +508,16 @@ async function kirimPerintah(id, perintah) {
             });
           });
         },
-      }).then((result) => {
-        if (result.isConfirmed) {
-          eksekusiPerintah(id, perintah, tanggal, jamMenit, btn, true);
-        } else {
-          btn.innerHTML = originalContent;
-          btn.disabled = false;
-        }
       });
       return;
     }
 
+    // jika cek.success true → lanjutkan eksekusi (tombol masih processing)
     eksekusiPerintah(id, perintah, tanggal, jamMenit, btn, true);
   } catch (err) {
     console.error("Error:", err);
     alert("Terjadi kesalahan: " + err.message);
-    btn.innerHTML = originalContent;
-    btn.disabled = false;
+    setProcessingOnButton(btn, false);
   }
 }
 
@@ -514,9 +531,10 @@ function eksekusiPerintah(
   confirmed = true,
   durasi = null
 ) {
-  const originalContent = btn.innerHTML;
+  if (btn && !btn.dataset.original) btn.dataset.original = btn.innerHTML;
+  setProcessingOnButton(btn, true, "Memproses...");
 
-  fetch(`/perangkat/${id}/toggle`, {
+  return fetch(`/perangkat/${id}/toggle`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -529,8 +547,9 @@ function eksekusiPerintah(
   })
     .then((res) => res.json())
     .then((finalData) => {
-      if (!finalData.success) throw new Error(finalData.message);
+      if (!finalData.success) throw new Error(finalData.message || "Gagal");
 
+      // segera update badge & buttons berdasarkan hasil
       updateButtonStatus(id, perintah);
       syncButtonStatusFromBadge();
       showAlert({
@@ -548,7 +567,7 @@ function eksekusiPerintah(
       alert("Terjadi kesalahan: " + err.message);
     })
     .finally(() => {
-      btn.innerHTML = originalContent;
-      btn.disabled = false;
+      // selalu bersihkan state processing pada kartu ini
+      clearProcessingByDeviceId(id);
     });
 }
