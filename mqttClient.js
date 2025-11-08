@@ -27,10 +27,29 @@ const client = mqtt.connect(BROKER, {
 function publishKontrol(topic, status, retain = true) {
   if (!topic) return;
   try {
-    const payload = JSON.stringify({ status: String(status).toUpperCase() });
-    client.publish(topic, payload, { qos: 1, retain }, (err) => {
-      if (err) console.error("❌ Publish kontrol gagal:", topic, err.message);
+    const st = String(status).toUpperCase();
+
+    // 1) JSON modern (dipakai UI/simulator): { status: "ON" }
+    // 2) Kompatibilitas lama/ESP: { command: "ON" }
+    // 3) Plain fallback: "ON"
+    const payloadJson = JSON.stringify({ status: st, command: st });
+    // publish JSON
+    client.publish(topic, payloadJson, { qos: 1, retain }, (err) => {
+      if (err) {
+        console.error("❌ Publish kontrol (JSON) gagal:", topic, err.message);
+      } else {
+        console.log(`➡️ Publish kontrol JSON to ${topic}: ${payloadJson}`);
+      }
     });
+
+    // also publish plain string shortly after as fallback for clients that expect raw "ON"/"OFF"
+    setTimeout(() => {
+      client.publish(topic, st, { qos: 1, retain: false }, (err) => {
+        if (err) console.error("❌ Publish kontrol (plain) gagal:", topic, err.message);
+        else console.log(`➡️ Publish kontrol PLAIN to ${topic}: ${st}`);
+      });
+    }, 120); // delay small so broker processes JSON first
+
   } catch (e) {
     console.error("❌ Gagal kirim kontrol:", e.message);
   }
@@ -218,3 +237,4 @@ client.on("message", async (topic, message) => {
     console.error(`❌ Gagal memproses data dari "${perangkat?.nama_perangkat || topic}":`, err.message);
   }
 });
+
