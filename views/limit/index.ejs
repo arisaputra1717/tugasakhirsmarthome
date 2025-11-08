@@ -1,0 +1,190 @@
+<div class="container py-4">
+  <h2 class="mb-4">
+    <i class="bi bi-battery-half text-success"></i> Daftar Limit Energi
+  </h2>
+
+  <form action="/limit" method="POST" class="row g-2 mb-4">
+    <div class="col-md-3">
+      <input
+        type="number"
+        step="0.01"
+        name="batas_kwh"
+        class="form-control"
+        placeholder="Batas kWh per hari"
+        required
+      />
+    </div>
+    <div class="col-md-3">
+      <input type="date" name="tanggal_mulai" class="form-control" required />
+    </div>
+    <div class="col-md-3">
+      <input type="date" name="tanggal_selesai" class="form-control" required />
+    </div>
+    <div class="col-md-3">
+      <button class="btn btn-primary w-100" type="submit">Tambah Limit</button>
+    </div>
+  </form>
+  <div class="table-responsive">
+    <table id="tabel-limit" class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Batas kWh per hari (00.00-23.59)</th>
+          <th>Tanggal Mulai</th>
+          <th>Tanggal Selesai</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% limitList.forEach((limit, index) => { %>
+        <tr>
+          <td><%= index + 1 %></td>
+          <td><%= limit.batas_kwh.toFixed(2) %></td>
+          <td>
+            <%= new Date(limit.tanggal_mulai).toLocaleDateString('id-ID') %>
+          </td>
+          <td>
+            <%= new Date(limit.tanggal_selesai).toLocaleDateString('id-ID') %>
+          </td>
+          <td>
+            <a href="/limit/<%= limit.id %>/edit" class="btn btn-sm btn-warning"
+              >Edit</a
+            >
+            <button
+              type="button"
+              class="btn btn-sm btn-danger btn-hapus-limit"
+              data-id="<%= limit.id %>"
+              data-batas="<%= limit.batas_kwh.toFixed(2) %>"
+              data-tanggal="<%= new Date(limit.tanggal_mulai).toLocaleDateString('id-ID') %> - <%= new Date(limit.tanggal_selesai).toLocaleDateString('id-ID') %>"
+            >
+              Hapus
+            </button>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function () {
+    $("#tabel-limit").DataTable({
+      pageLength: 10,
+      responsive: true,
+      language: {
+        emptyTable: "Tidak ada data",
+      },
+    });
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form[action='/limit']");
+    const tglMulai = document.querySelector("input[name='tanggal_mulai']");
+    const tglSelesai = document.querySelector("input[name='tanggal_selesai']");
+    const batasKwh = document.querySelector("input[name='batas_kwh']");
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      // Validasi tanggal di frontend
+      const startDate = new Date(tglMulai.value);
+      const endDate = new Date(tglSelesai.value);
+      if (startDate > endDate) {
+        return showAlert({
+          title: "Tanggal Tidak Valid",
+          text: "Tanggal mulai tidak boleh lebih besar dari tanggal selesai.",
+          icon: "error",
+        });
+      }
+
+      // Kirim data ke server via fetch
+      const formData = {
+        batas_kwh: batasKwh.value,
+        tanggal_mulai: tglMulai.value,
+        tanggal_selesai: tglSelesai.value,
+      };
+
+      try {
+        const response = await fetch("/limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          form.reset();
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        }
+
+        showAlert({
+          title: result.status === "success" ? "Berhasil" : "Gagal",
+          text: result.message,
+          icon: result.status,
+        });
+      } catch (err) {
+        showAlert({
+          title: "Error",
+          text: "Terjadi kesalahan saat mengirim data",
+          icon: "error",
+        });
+      }
+    });
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    // Listener tombol hapus limit dengan Swal konfirmasi
+    document.body.addEventListener("click", async function (e) {
+      if (e.target.classList.contains("btn-hapus-limit")) {
+        const id = e.target.dataset.id;
+        const batas = e.target.dataset.batas;
+        const tanggal = e.target.dataset.tanggal;
+
+        const result = await Swal.fire({
+          title: "Yakin ingin menghapus?",
+          html: `Limit energi <b>${batas} kWh</b> untuk tanggal <b>${tanggal}</b> akan dihapus secara permanen.`,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Ya, Hapus!",
+          cancelButtonText: "Batal",
+          confirmButtonColor: "#d33",
+          cancelButtonColor: "#3085d6",
+          reverseButtons: true,
+        });
+
+        if (result.isConfirmed) {
+          try {
+            const response = await fetch(`/limit/${id}/delete`, {
+              method: "POST", // sesuaikan method & endpoint sesuai backend-mu
+              headers: { "Content-Type": "application/json" },
+            });
+
+            const res = await response.json();
+
+            showAlert({
+              title: res.status === "success" ? "Berhasil" : "Gagal",
+              text: res.message,
+              icon: res.status,
+            });
+
+            if (res.status === "success") {
+              setTimeout(() => {
+                window.location.reload();
+              }, 1500);
+            }
+          } catch (err) {
+            showAlert({
+              title: "Error",
+              text: "Terjadi kesalahan saat menghapus limit energi.",
+              icon: "error",
+            });
+          }
+        }
+      }
+    });
+  });
+</script>

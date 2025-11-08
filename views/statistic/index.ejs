@@ -1,0 +1,188 @@
+<div class="container py-4">
+  <h3 class="mb-3"><i class="bi bi-bar-chart-fill"></i> Statistik Energi</h3>
+
+  <!-- Filter Tanggal -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <label class="form-label">Pilih Tanggal</label>
+      <input type="date" id="filterTanggal" class="form-control" />
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Total Energi -->
+    <div class="col-xl-6 col-md-6 mb-4">
+      <div class="card border-left-primary shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-primary text-uppercase mb-1"
+              >
+                Total Energi
+              </div>
+              <div
+                class="h5 mb-0 font-weight-bold text-gray-800"
+                id="totalEnergi"
+              >
+                0 kWh
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-bolt fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limit kWh -->
+    <div class="col-xl-6 col-md-6 mb-4">
+      <div class="card border-left-success shadow h-100 py-2">
+        <div class="card-body">
+          <div class="row no-gutters align-items-center">
+            <div class="col mr-2">
+              <div
+                class="text-xs font-weight-bold text-success text-uppercase mb-1"
+              >
+                Limit kWh
+              </div>
+              <div class="h5 mb-0 font-weight-bold text-gray-800" id="limitKwh">
+                0 kWh
+              </div>
+            </div>
+            <div class="col-auto">
+              <i class="fas fa-tachometer-alt fa-2x text-gray-300"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Chart -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <canvas
+        id="chartEnergi"
+        style="display: block; box-sizing: border-box; height: 500px"
+      ></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    let chart;
+    const filterTanggal = document.getElementById("filterTanggal");
+
+    // Set default value ke hari ini (format yyyy-mm-dd)
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    filterTanggal.value = `${yyyy}-${mm}-${dd}`;
+
+    // Load data pertama kali
+    if (filterTanggal.value) {
+      loadData(filterTanggal.value);
+    }
+
+    // Event saat tanggal diganti
+    filterTanggal.addEventListener("change", function () {
+      if (this.value) {
+        loadData(this.value);
+      }
+    });
+
+    async function loadData(tanggal) {
+      try {
+        const response = await fetch(`statistic/data?tanggal=${tanggal}`, {
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (result.status === "success") {
+          updateDisplay(result);
+        } else {
+          alert(result.message || "Gagal memuat data");
+        }
+      } catch (err) {
+        console.error("Error loading data:", err);
+        loadSampleData();
+      }
+    }
+
+    function updateDisplay(data) {
+      document.getElementById("totalEnergi").textContent = data.totalEnergi;
+      document.getElementById("limitKwh").textContent = data.limitKwh;
+      // Update chart
+      updateChart(data.chartLabels, data.chartData);
+    }
+
+    // Chart.js setup
+    function updateChart(labels, data) {
+      const ctx = document.getElementById("chartEnergi").getContext("2d");
+
+      if (chart) {
+        chart.destroy();
+      }
+
+      // Cari nilai maksimal data
+      const maxData = Math.max(...data);
+      const yMax = Math.max(maxData, 10); // minimal 10, kalau data lebih besar pakai data tsb
+
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "Energi (kWh)",
+              data: data,
+              fill: false,
+              borderColor: "rgb(75, 192, 192)",
+              backgroundColor: "rgba(75, 192, 192, 0.2)",
+              tension: 0.1,
+              pointBackgroundColor: "rgb(75, 192, 192)",
+              pointBorderColor: "rgb(75, 192, 192)",
+              pointRadius: 4,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: "Konsumsi Energi Harian",
+            },
+            legend: {
+              display: true,
+              position: "top",
+            },
+          },
+          scales: {
+            y: {
+              min: 0,
+              max: yMax,
+              title: {
+                display: true,
+                text: "Energi (kWh)",
+              },
+            },
+            x: {
+              title: {
+                display: true,
+                text: "Waktu",
+              },
+            },
+          },
+        },
+      });
+    }
+  });
+</script>

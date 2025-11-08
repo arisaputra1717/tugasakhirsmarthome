@@ -1,0 +1,192 @@
+<div class="container py-4">
+  <h2 class="mb-4">
+    <i class="bi bi-pencil-square me-2"></i> Edit Penjadwalan Perangkat
+  </h2>
+
+  <form
+    id="penjadwalanEditForm"
+    action="/penjadwalan/update/<%= jadwal.id %>"
+    method="POST"
+    class="p-3 border rounded shadow-sm bg-white"
+  >
+    <!-- Perangkat -->
+    <div class="mb-3">
+      <label for="perangkat_id" class="form-label">
+        <i class="bi bi-cpu me-1"></i> Perangkat
+      </label>
+      <select
+        name="perangkat_id"
+        id="perangkat_id"
+        class="form-select"
+        required
+      >
+        <option value="">-- Pilih Perangkat --</option>
+        <% perangkatList.forEach(p => { %>
+        <option value="<%= p.id %>" <%= p.id === jadwal.perangkat_id ? 'selected' : '' %>>
+          <%= p.nama_perangkat %>
+        </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- Tanggal Mulai -->
+    <div class="mb-3">
+      <label for="tanggal_mulai" class="form-label">
+        <i class="bi bi-calendar-event me-1"></i> Tanggal Mulai
+      </label>
+      <input
+        type="date"
+        name="tanggal_mulai"
+        id="tanggal_mulai"
+        class="form-control"
+        required
+        value="<%= new Date(jadwal.tanggal_mulai).toISOString().slice(0, 10) %>"
+      />
+    </div>
+
+    <!-- Tanggal Selesai -->
+    <div class="mb-3">
+      <label for="tanggal_selesai" class="form-label">
+        <i class="bi bi-calendar-check me-1"></i> Tanggal Selesai
+      </label>
+      <input
+        type="date"
+        name="tanggal_selesai"
+        id="tanggal_selesai"
+        class="form-control"
+        required
+        value="<%= new Date(jadwal.tanggal_selesai).toISOString().slice(0, 10) %>"
+      />
+    </div>
+
+    <!-- Jam Mulai -->
+    <div class="mb-3">
+      <label for="jam_mulai" class="form-label">
+        <i class="bi bi-clock-history me-1"></i> Jam Mulai
+      </label>
+      <input
+        type="time"
+        name="jam_mulai"
+        id="jam_mulai"
+        class="form-control"
+        required
+        value="<%= jadwal.jam_mulai %>"
+      />
+    </div>
+
+    <!-- Jam Selesai -->
+    <div class="mb-3">
+      <label for="jam_selesai" class="form-label">
+        <i class="bi bi-alarm me-1"></i> Jam Selesai
+      </label>
+      <input
+        type="time"
+        name="jam_selesai"
+        id="jam_selesai"
+        class="form-control"
+        required
+        value="<%= jadwal.jam_selesai %>"
+      />
+    </div>
+
+    <!-- Aktif -->
+    <div class="form-check mb-3">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        name="aktif"
+        id="aktif"
+        value="1"
+        <%= jadwal.aktif ? 'checked' : '' %>
+      />
+      <label class="form-check-label" for="aktif"> Jadwal Aktif </label>
+    </div>
+
+    <!-- Tombol -->
+    <div class="mt-3">
+      <button type="submit" class="btn btn-primary me-2">
+        <i class="bi bi-save me-1"></i> Update
+      </button>
+      <a href="/penjadwalan" class="btn btn-secondary">
+        <i class="bi bi-x-circle me-1"></i> Batal
+      </a>
+    </div>
+  </form>
+</div>
+<script>
+document.getElementById("penjadwalanEditForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const formDataRaw = new FormData(form);
+  if (!formDataRaw.has("aktif")) {
+    formDataRaw.append("aktif", "0");
+  }
+  let formData = Object.fromEntries(formDataRaw);
+
+  try {
+    let response = await fetch(form.action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+
+    let result = await response.json();
+
+    if (result.status === "recommendation") {
+      // Tampilkan konfirmasi
+      Swal.fire({
+        title: "Rekomendasi Jadwal",
+        html: `${result.message}<br><b>${result.rekomendasi.mulai} - ${result.rekomendasi.selesai}</b>`,
+        icon: "info",
+        showCancelButton: true,
+        confirmButtonText: "Gunakan Rekomendasi",
+        cancelButtonText: "Batal"
+      }).then(async (choice) => {
+        if (choice.isConfirmed) {
+          formData.jam_mulai = result.rekomendasi.mulai;
+          formData.jam_selesai = result.rekomendasi.selesai;
+          formData.use_recommendation = true;
+
+          // Kirim ulang request dengan rekomendasi
+          let confirmRes = await fetch(form.action, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData),
+          });
+
+          let confirmResult = await confirmRes.json();
+          showAlert({
+            title: confirmResult.status === "success" ? "Berhasil" : "Gagal",
+            text: confirmResult.message,
+            icon: confirmResult.status,
+          });
+
+          if (confirmResult.status === "success") {
+            setTimeout(() => { window.location.href = "/penjadwalan"; }, 1200);
+          }
+        }
+      });
+      return; // hentikan proses awal
+    }
+
+    // Kalau bukan recommendation
+    showAlert({
+      title: result.status === "success" ? "Berhasil" : "Gagal",
+      text: result.message,
+      icon: result.status,
+    });
+
+    if (result.status === "success") {
+      setTimeout(() => { window.location.href = "/penjadwalan"; }, 1200);
+    }
+
+  } catch (err) {
+    showAlert({
+      title: "Error",
+      text: "Terjadi kesalahan saat mengirim data",
+      icon: "error",
+    });
+  }
+});
+</script>

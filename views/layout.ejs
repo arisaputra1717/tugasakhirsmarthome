@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <!-- Link Google Fonts Inter -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter&display=swap"
+      rel="stylesheet"
+    />
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.min.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
+
+    <!-- Favicon -->
+    <link rel="icon" href="/smarthome.ico" type="image/x-icon" />
+
+    <!-- Style CSS kamu -->
+    <style>
+      * {
+        font-family: "Inter", sans-serif;
+      }
+      
+      bg-blue {
+        background-color: #cdf0f7;
+      }
+    </style>
+  </head>
+
+  <body class="d-flex flex-column min-vh-100">
+    <!-- Navbar -->
+    <nav
+      class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm mb-4"
+    >
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="/">
+          <i class="fas fa-house-signal me-1"></i> SmartHome
+        </a>
+
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#mainNavbar"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="mainNavbar">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Dashboard')) { %>active<% } %>"
+                href="/"
+              >
+                <i class="fas fa-chart-line me-1"></i> Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Perangkat')) { %>active<% } %>"
+                href="/perangkat"
+              >
+                <i class="fas fa-plug me-1"></i> Perangkat
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Penjadwalan')) { %>active<% } %>"
+                href="/penjadwalan"
+              >
+                <i class="fas fa-clock me-1"></i> Penjadwalan
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Limit')) { %>active<% } %>"
+                href="/limit"
+              >
+                <i class="fas fa-battery-three-quarters me-1"></i> Limit Energi
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Statistik')) { %>active<% } %>"
+                href="/statistic"
+              >
+                <i class="fas fa-chart-pie me-1"></i> Statistik
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link <% if (title.includes('Laporan')) { %>active<% } %>"
+                href="/laporan"
+              >
+                <i class="fas fa-file-alt me-1"></i> Laporan
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Konten Utama -->
+    <div class="container">
+      <% if (typeof message !=='undefined' && message) { %>
+      <div class="alert alert-info"><%= message %></div>
+      <% } %> <%- body %>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white text-center py-3 mt-auto">
+      <small>&copy; <%= new Date().getFullYear() %> Windi Ari Saputra</small>
+    </footer>
+
+    <!-- JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/sweetalert2/sweetalert2.all.min.js"></script>
+    <script src="/js/alert.js"></script>
+  </body>
+</html>

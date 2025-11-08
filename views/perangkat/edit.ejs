@@ -1,0 +1,131 @@
+<div class="container py-4">
+  <h3 class="mb-4">
+    <i class="bi bi-pencil-square"></i> Edit Perangkat
+  </h3>
+<form id="editPerangkatForm" class="p-3 border rounded shadow-sm bg-white">
+  <div class="mb-3">
+    <label class="form-label">Nama Perangkat</label>
+    <input 
+      name="nama_perangkat" 
+      class="form-control" 
+      value="<%= perangkat.nama_perangkat %>" 
+      required 
+    />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Topik Data (MQTT)</label>
+    <input 
+      name="topik_mqtt" 
+      class="form-control" 
+      value="<%= perangkat.topik_mqtt %>" 
+      required 
+    />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Topik Kontrol (MQTT)</label>
+    <input 
+      name="topik_kontrol" 
+      class="form-control" 
+      value="<%= perangkat.topik_kontrol || '' %>" 
+      placeholder="(opsional)" 
+    />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Daya (Watt)</label>
+    <input 
+      type="text" 
+      name="daya_watt" 
+      class="form-control" 
+      value="<%= perangkat.daya_watt %>" 
+      required 
+    />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Durasi (Jam)</label>
+    <input 
+      type="text" 
+      name="durasi_jam" 
+      class="form-control" 
+      value="<%= perangkat.durasi_jam %>" 
+      required 
+    />
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Tipe</label>
+    <select name="tipe" class="form-select" required>
+      <option value="Non Interrupt" <%= perangkat.tipe === 'Non Interrupt' ? 'selected' : '' %>>Non Interrupt</option>
+      <option value="Interrupt" <%= perangkat.tipe === 'Interrupt' ? 'selected' : '' %>>Interrupt</option>
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    <i class="bi bi-save"></i> Update
+  </button>
+  <a href="/perangkat" class="btn btn-secondary ms-2">
+    <i class="bi bi-arrow-left"></i> Kembali
+  </a>
+</form>
+
+</div>
+
+<script>
+  document.getElementById("editPerangkatForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const formData = Object.fromEntries(new FormData(form));
+
+    try {
+      const response = await fetch("/perangkat/<%= perangkat.id %>/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+
+      const result = await response.json();
+
+      showAlert({
+        title: result.status === "success" ? "Berhasil" : "Gagal",
+        text: result.message,
+        icon: result.status
+      });
+
+      if (result.status === "success") {
+        setTimeout(() => {
+          window.location.href = "/perangkat";
+        }, 1200);
+      }
+    } catch (err) {
+      showAlert({
+        title: "Error",
+        text: "Terjadi kesalahan saat mengirim data",
+        icon: "error"
+      });
+    }
+  });
+
+  // Fungsi untuk filter input angka + dot
+  function allowNumberAndDot(input) {
+    input.addEventListener("input", function () {
+      this.value = this.value.replace(/[^0-9.]/g, ""); // hanya angka dan dot
+      // Jika ada lebih dari 1 dot, sisakan hanya yang pertama
+      if ((this.value.match(/\./g) || []).length > 1) {
+        this.value = this.value.substring(0, this.value.length - 1);
+      }
+    });
+  }
+
+  // Terapkan ke kedua input
+  document.addEventListener("DOMContentLoaded", function () {
+    const dayaInput = document.querySelector("input[name='daya_watt']");
+    const durasiInput = document.querySelector("input[name='durasi_jam']");
+
+    if (dayaInput) allowNumberAndDot(dayaInput);
+    if (durasiInput) allowNumberAndDot(durasiInput);
+  });
+</script>

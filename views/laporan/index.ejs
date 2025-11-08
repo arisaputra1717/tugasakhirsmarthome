@@ -1,0 +1,107 @@
+<div class="container py-4">
+  <h3 class="mb-3"><i class="bi bi-journal-text"></i> Laporan Energi</h3>
+
+  <div class="row g-3 mb-4 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label">Pilih Tanggal</label>
+      <input type="date" id="filterTanggal" class="form-control" />
+    </div>
+    <div class="col-md-6 d-flex gap-2">
+      <button id="btnExcel" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Export Excel
+      </button>
+      <button id="btnPDF" class="btn btn-danger">
+        <i class="bi bi-file-earmark-pdf"></i> Export PDF
+      </button>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table id="laporanTable" class="table table-bordered table-striped mt-3">
+      <thead>
+        <tr>
+          <th>Tanggal & Waktu</th>
+          <th>Nama Perangkat</th>
+          <th>Volt (V)</th>
+          <th>Ampere (A)</th>
+          <th>Watt (W)</th>
+          <th>Energy Δ (kWh)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- kosong: DataTables akan mengisi lewat ajax -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const filterTanggal = document.getElementById("filterTanggal");
+    const today = new Date().toISOString().split("T")[0];
+    filterTanggal.value = today;
+
+    // Inisialisasi DataTable sekali — ambil data via ajax
+    const table = $("#laporanTable").DataTable({
+      processing: true,
+      ajax: {
+        url: `/laporan/data?tanggal=${today}`,
+        dataSrc: function (json) {
+          // Pastikan format JSON yang kita terima cocok:
+          if (!json) return [];
+          if (json.status && json.status !== "success") {
+            console.error("API returned error", json);
+            return [];
+          }
+          return json.data || [];
+        },
+      },
+      columns: [
+        {
+          data: "timestamp",
+          render: function (d) {
+            return d ? new Date(d).toLocaleString() : "";
+          },
+        },
+        { data: "nama_perangkat" },
+        { data: "volt" },
+        { data: "ampere" },
+        { data: "watt" },
+        { data: "energy_delta" },
+      ],
+      language: { emptyTable: "Tidak ada data" },
+      pageLength: 10,
+      responsive: true,
+    });
+
+    // Saat tanggal berubah, ubah url ajax dan reload
+    filterTanggal.addEventListener("change", function () {
+      if (!this.value) return;
+      const newUrl = `/laporan/data?tanggal=${this.value}`;
+      // gunakan API ajax.url(...).load() / ajax.reload()
+      table.ajax.url(newUrl).load();
+    });
+
+    // Fungsi cek tanggal sebelum export
+    function checkAndExport(type) {
+      const tanggal = filterTanggal.value;
+      if (!tanggal) {
+        showAlert({
+          title: "Tanggal belum dipilih",
+          text: "Silakan pilih tanggal terlebih dahulu sebelum export.",
+          icon: "warning",
+        });
+        return;
+      }
+      // Arahkan ke endpoint export sesuai type
+      window.location.href = `/laporan/export/${type}?tanggal=${tanggal}`;
+    }
+
+    // Event tombol export
+    document
+      .getElementById("btnExcel")
+      .addEventListener("click", () => checkAndExport("excel"));
+    document
+      .getElementById("btnPDF")
+      .addEventListener("click", () => checkAndExport("pdf"));
+  });
+</script>

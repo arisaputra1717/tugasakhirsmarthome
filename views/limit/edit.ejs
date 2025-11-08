@@ -1,0 +1,88 @@
+<div class="container py-4">
+  <h2 class="mb-4">Edit Limit Energi</h2>
+
+  <form id="editLimitForm" action="/limit/<%= limit.id %>/edit" method="POST" class="row g-2 mb-4">
+    <div class="col-md-3">
+      <input type="number" step="0.01" name="batas_kwh" class="form-control" 
+        placeholder="Batas kWh per hari"
+        value="<%= limit.batas_kwh %>" required>
+    </div>
+
+    <div class="col-md-3">
+      <input type="date" name="tanggal_mulai" class="form-control"
+        value="<%= limit.tanggal_mulai %>" required>
+    </div>
+
+    <div class="col-md-3">
+      <input type="date" name="tanggal_selesai" class="form-control"
+        value="<%= limit.tanggal_selesai %>" required>
+    </div>
+
+    <div class="col-md-3">
+      <button class="btn btn-primary w-100" type="submit">Simpan Perubahan</button>
+    </div>
+  </form>
+
+  <a href="/limit" class="btn btn-secondary">Kembali</a>
+</div>
+
+<script src="/sweetalert2/sweetalert2.all.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("editLimitForm");
+    const tglMulai = form.querySelector("input[name='tanggal_mulai']");
+    const tglSelesai = form.querySelector("input[name='tanggal_selesai']");
+    const batasKwh = form.querySelector("input[name='batas_kwh']");
+
+    form.addEventListener("submit", async function(e) {
+        e.preventDefault();
+
+        // Validasi tanggal di frontend
+        const startDate = new Date(tglMulai.value);
+        const endDate = new Date(tglSelesai.value);
+        if (startDate > endDate) {
+            return Swal.fire({
+                title: "Tanggal Tidak Valid",
+                text: "Tanggal mulai tidak boleh lebih besar dari tanggal selesai.",
+                icon: "error"
+            });
+        }
+
+        // Kirim data ke server via fetch
+        const formData = {
+            batas_kwh: batasKwh.value,
+            tanggal_mulai: tglMulai.value,
+            tanggal_selesai: tglSelesai.value
+        };
+
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            Swal.fire({
+                title: result.status === "success" ? "Berhasil" : "Gagal",
+                text: result.message,
+                icon: result.status === "success" ? "success" : "error"
+            });
+
+            if (result.status === "success") {
+                setTimeout(() => {
+                    window.location.href = "/limit";
+                }, 1000);
+            }
+
+        } catch (err) {
+            Swal.fire({
+                title: "Error",
+                text: "Terjadi kesalahan saat mengirim data",
+                icon: "error"
+            });
+        }
+    });
+});
+</script>

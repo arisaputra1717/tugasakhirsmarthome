@@ -1,0 +1,125 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">
+      <i class="bi bi-hdd-network me-2"></i> Daftar Perangkat
+    </h2>
+    <a href="/perangkat/create" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i> Tambah Perangkat
+    </a>
+  </div>
+
+  <div class="table-responsive">
+    <table id="perangkatTable" class="table table-bordered table-striped mt-3">
+      <thead class="table-light">
+        <tr>
+          <th>Nama</th>
+          <th>Topik Data</th>
+          <th>Topik Kontrol</th>
+          <th>Daya (Watt)</th>
+          <th>Durasi (Jam)</th>
+          <th>Tipe</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% perangkat.forEach(p=> { %>
+        <tr>
+          <td><%= p.nama_perangkat %></td>
+          <td><%= p.topik_mqtt %></td>
+          <td><%= p.topik_kontrol || '-' %></td>
+          <td><%= p.daya_watt || '-' %></td>
+          <td><%= p.durasi_jam|| '-' %></td>
+          <td><%= p.tipe|| '-' %></td>
+          <td class="text-center">
+            <% if (p.status === 'ON') { %>
+            <span class="badge rounded-pill bg-success"><%= p.status %></span>
+            <% } else if (p.status === 'OFF') { %>
+            <span class="badge rounded-pill bg-danger"><%= p.status %></span>
+            <% } else { %>
+            <span class="badge rounded-pill bg-secondary">-</span>
+            <% } %>
+          </td>
+
+          <td
+            class="d-flex flex-wrap justify-content-center align-items-center gap-2"
+          >
+            <a
+              href="/perangkat/<%= p.id %>/edit"
+              class="btn btn-sm btn-warning"
+            >
+              <i class="bi bi-pencil-square"></i>
+            </a>
+            <button
+              type="button"
+              class="btn btn-sm btn-danger btn-hapus-perangkat"
+              data-id="<%= p.id %>"
+              data-nama="<%= p.nama_perangkat %>"
+            >
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  $(document).ready(function () {
+    $("#perangkatTable").DataTable({
+      pageLength: 10,
+      language: {
+        emptyTable: "Tidak ada data",
+      },
+    });
+
+    // Event listener untuk tombol hapus
+    $(document).on("click", ".btn-hapus-perangkat", async function () {
+      const id = $(this).data("id");
+      const nama = $(this).data("nama");
+
+      Swal.fire({
+        title: "Yakin ingin menghapus?",
+        html: `Perangkat <b>${nama}</b> akan dihapus secara permanen.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Ya, Hapus!",
+        cancelButtonText: "Batal",
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        reverseButtons: true,
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          try {
+            const response = await fetch(`/perangkat/${id}/delete`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+            });
+
+            const res = await response.json();
+
+            Swal.fire({
+              title: res.status === "success" ? "Berhasil" : "Gagal",
+              text: res.message,
+              icon: res.status,
+              timer: 1500,
+              showConfirmButton: false,
+            });
+
+            if (res.status === "success") {
+              setTimeout(() => location.reload(), 1500);
+            }
+          } catch (err) {
+            Swal.fire({
+              title: "Error",
+              text: "Terjadi kesalahan saat menghapus perangkat.",
+              icon: "error",
+            });
+          }
+        }
+      });
+    });
+  });
+</script>

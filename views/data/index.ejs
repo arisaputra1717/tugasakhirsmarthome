@@ -1,0 +1,28 @@
+<h1>Riwayat Data Penggunaan Energi</h1>
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Perangkat</th>
+      <th>Volt (V)</th>
+      <th>Ampere (A)</th>
+      <th>Watt (W)</th>
+      <th>Energy (Wh)</th>
+      <th>Δ Energy (Wh)</th>
+      <th>Waktu</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% data.forEach(row => { %>
+      <tr>
+        <td><%= row.Perangkat ? row.Perangkat.nama_perangkat : 'Unknown' %></td>
+        <td><%= row.volt %></td>
+        <td><%= row.ampere %></td>
+        <td><%= row.watt %></td>
+        <td><%= row.energy %></td>
+        <td><%= row.energy_delta %></td>
+        <td><%= new Date(row.timestamp).toLocaleString() %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>

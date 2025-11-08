@@ -1,0 +1,126 @@
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-calendar-week me-2"></i> Daftar Penjadwalan</h2>
+    <a href="/penjadwalan/create" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i> Tambah Jadwal
+    </a>
+  </div>
+
+  <p class="text-muted">Total: <%= penjadwalan.length %> jadwal</p>
+  <div class="table-responsive">
+    <table id="tabel-penjadwalan" class="table table-bordered table-striped">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Nama Perangkat</th>
+          <th>Tanggal</th>
+          <th>Jam (Setiap Hari)</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% penjadwalan.forEach((jadwal, index) => { %>
+        <tr>
+          <td><%= index + 1 %></td>
+          <td><%= jadwal.Perangkat?.nama_perangkat || '-' %></td>
+          <td>
+            <%= new Date(jadwal.tanggal_mulai).toLocaleDateString('id-ID', {
+            dateStyle: 'medium' }) %> - <%= new
+            Date(jadwal.tanggal_selesai).toLocaleDateString('id-ID', {
+            dateStyle: 'medium' }) %>
+          </td>
+          <td>
+            <%= jadwal.jam_mulai.slice(0,5) %> - <%=
+            jadwal.jam_selesai.slice(0,5) %>
+          </td>
+          <td>
+            <span
+              class="badge <%= jadwal.aktif ? 'bg-success' : 'bg-secondary' %>"
+            >
+              <%= jadwal.aktif ? 'Aktif' : 'Nonaktif' %>
+            </span>
+          </td>
+          <td
+            class="d-flex flex-wrap justify-content-center align-items-center gap-2"
+          >
+            <a
+              href="/penjadwalan/edit/<%= jadwal.id %>"
+              class="btn btn-sm btn-warning"
+            >
+              <i class="bi bi-pencil-square"></i> Edit
+            </a>
+            <button
+              class="btn btn-sm btn-danger btn-hapus-penjadwalan"
+              data-id="<%= jadwal.id %>"
+              data-nama="<%= jadwal.Perangkat?.nama_perangkat || 'Jadwal ini' %>"
+            >
+              <i class="bi bi-trash"></i> Hapus
+            </button>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    $(document).ready(function () {
+      $("#tabel-penjadwalan").DataTable({
+        pageLength: 10,
+        responsive: true,
+        order: [[2, "asc"]],
+        language: {
+          emptyTable: "Tidak ada data",
+        },
+      });
+
+      // Event listener untuk tombol hapus penjadwalan
+      $(document).on("click", ".btn-hapus-penjadwalan", function () {
+        const id = $(this).data("id");
+        const nama = $(this).data("nama");
+
+        Swal.fire({
+          title: "Yakin ingin menghapus?",
+          html: `Penjadwalan perangkat <b>${nama}</b> akan dihapus secara permanen.`,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "Ya, Hapus!",
+          cancelButtonText: "Batal",
+          confirmButtonColor: "#d33",
+          cancelButtonColor: "#3085d6",
+          reverseButtons: true,
+        }).then(async (result) => {
+          if (result.isConfirmed) {
+            try {
+              const response = await fetch(`/penjadwalan/delete/${id}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+              });
+
+              const res = await response.json();
+
+              Swal.fire({
+                title: res.status === "success" ? "Berhasil" : "Gagal",
+                text: res.message,
+                icon: res.status,
+                timer: 1500,
+                showConfirmButton: false,
+              });
+
+              if (res.status === "success") {
+                setTimeout(() => location.reload(), 1500);
+              }
+            } catch (err) {
+              Swal.fire({
+                title: "Error",
+                text: "Terjadi kesalahan saat menghapus penjadwalan.",
+                icon: "error",
+              });
+            }
+          }
+        });
+      });
+    });
+  </script>
+</div>

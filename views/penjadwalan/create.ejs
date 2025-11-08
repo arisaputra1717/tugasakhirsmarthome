@@ -1,0 +1,496 @@
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+/>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<div class="container py-4">
+  <div id="loadingSpinner" class="d-none text-center mt-3">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <div>Loading...</div>
+  </div>
+
+  <h2 class="mb-4">
+    <i class="bi bi-calendar-plus me-2"></i> Tambah Penjadwalan Perangkat
+  </h2>
+
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i> Info :
+    <ul>
+      <li>
+        Jika ingin menjadwalkan hanya untuk satu hari, samakan
+        <strong>Tanggal Mulai</strong> dan <strong>Tanggal Selesai</strong>.
+      </li>
+      <li>
+        Jam Mulai dan Jam Selesai berlaku setiap hari selama rentang tanggal
+        mulai sampai tanggal selesai.
+      </li>
+      <li>Penulisan Jam menggunakan skala 24 Jam (00.00 - 23.59)</li>
+    </ul>
+  </div>
+
+  <form id="penjadwalanForm" action="/penjadwalan/store" method="POST">
+    <table class="table table-bordered align-middle text-center">
+      <thead class="table-light">
+        <tr>
+          <th>No</th>
+          <th>Perangkat</th>
+          <th>Daya (W)</th>
+          <th>Rentang Tanggal</th>
+          <th>Jam Mulai</th>
+          <th>Jam Selesai</th>
+          <th>Tipe</th>
+          <th>Skor Prioritas</th>
+          <th>Total Daya (Wh)</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="jadwalTable">
+        <tr>
+          <td>1</td>
+          <td>
+            <select name="perangkat_id" class="form-select perangkat" required>
+              <option value="">-- Pilih --</option>
+              <% perangkatList.forEach(p => { %>
+              <option
+                value="<%= p.id %>"
+                data-daya="<%= p.daya_watt %>"
+                data-tipe="<%= p.tipe %>"
+                data-skor="<%= p.skor_prioritas %>"
+              >
+                <%= p.nama_perangkat %>
+              </option>
+              <% }) %>
+            </select>
+          </td>
+          <td>
+            <input
+              type="text"
+              class="form-control daya"
+              name="daya_watt"
+              readonly
+            />
+          </td>
+          <td>
+            <input
+              type="text"
+              class="form-control tanggal_range"
+              name="tanggal_range"
+              placeholder="Pilih rentang tanggal"
+              required
+            />
+          </td>
+
+          <td>
+            <input
+              type="time"
+              class="form-control jam_mulai"
+              name="jam_mulai"
+              required
+            />
+          </td>
+          <td>
+            <input
+              type="time"
+              class="form-control jam_selesai"
+              name="jam_selesai"
+              required
+            />
+          </td>
+          <td>
+            <input type="text" class="form-control tipe" name="tipe" readonly />
+          </td>
+          <td>
+            <input
+              type="text"
+              class="form-control skor"
+              name="skor_prioritas"
+              step="0.0001"
+              readonly
+            />
+          </td>
+          <td>
+            <input
+              type="text"
+              class="form-control total_daya"
+              name="total_daya"
+              readonly
+            />
+          </td>
+          <td>
+            <button type="button" class="btn btn-danger btn-sm deleteRow">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+      </tbody>
+
+      <tfoot>
+        <tr>
+          <td colspan="10" class="text-center">
+            <button type="button" id="addRow" class="btn btn-success btn-sm">
+              <i class="bi bi-plus-circle"></i>
+            </button>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="mt-3">
+      <button type="submit" class="btn btn-primary me-2">
+        <i class="bi bi-save me-1"></i> Simpan
+      </button>
+      <a href="/penjadwalan" class="btn btn-secondary">
+        <i class="bi bi-x-circle me-1"></i> Batal
+      </a>
+    </div>
+  </form>
+</div>
+<script>
+  document
+    .getElementById("penjadwalanForm")
+    .addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const form = e.target;
+      const loadingSpinner = document.getElementById("loadingSpinner");
+
+      // Tampilkan spinner
+      loadingSpinner.classList.remove("d-none");
+      const submitButton = form.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+
+      // Ambil semua form data
+      const rawFormData = new FormData(form);
+      const formData = {};
+      rawFormData.forEach((value, key) => {
+        if (formData[key]) {
+          if (!Array.isArray(formData[key])) formData[key] = [formData[key]];
+          formData[key].push(value);
+        } else {
+          formData[key] = value;
+        }
+      });
+
+      try {
+        let response = await fetch("/penjadwalan/store", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        let result = await response.json();
+
+        // ✅ Jika ada konflik, tampilkan popup rekomendasi
+        if (result.status === "recommendation") {
+          const conflict = result.rekomendasi[0];
+          const rekom = conflict.recommendation;
+
+          if (rekom.action === "delay") {
+            Swal.fire({
+              title: "⚠️ Tidak Ada Slot Aman",
+              html: `
+        Perangkat <b>${conflict.nama_perangkat}</b> dijadwalkan 
+        <b>${conflict.interval.mulai}-${conflict.interval.selesai}</b> 
+        melebihi kapasitas (${conflict.load}W > ${conflict.kapasitasWatt}W).<br><br>
+        <b>Catatan:</b> ${rekom.reason}
+      `,
+              icon: "info",
+              confirmButtonText: "OK",
+            }).then(() => {
+              // Optional: bisa reset form atau beri flag delay
+              console.log("User diberi tahu: tidak ada slot aman");
+            });
+          } else {
+            // Flow rekomendasi normal
+            Swal.fire({
+              title: "⚠️ Beban Melebihi Kapasitas",
+              html: `
+        Perangkat <b>${conflict.nama_perangkat}</b> dijadwalkan 
+        <b>${conflict.interval.mulai}-${conflict.interval.selesai}</b> 
+        melebihi kapasitas (${conflict.load}W > ${conflict.kapasitasWatt}W).<br><br>
+        <b>Rekomendasi: ${rekom.to.mulai}-${rekom.to.selesai}</b><br>
+        Apakah Anda ingin mengikuti rekomendasi ini?
+      `,
+              icon: "warning",
+              showCancelButton: true,
+              confirmButtonText: "Ya, ikuti rekomendasi",
+              cancelButtonText: "Tidak",
+            }).then(async (popupResult) => {
+              if (popupResult.isConfirmed) {
+                const payload = {
+                  perangkat_id: formData.perangkat_id,
+                  tanggal_range: formData.tanggal_range,
+                  jam_mulai: rekom.to.mulai, // override langsung
+                  jam_selesai: rekom.to.selesai, // override langsung
+                  fromRecommendation: true,
+                };
+
+                formData.jam_mulai = rekom.to.mulai;
+                formData.jam_selesai = rekom.to.selesai;
+                formData.fromRecommendation = true;
+
+                const resUpdate = await fetch("/penjadwalan/store", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+
+                const updated = await resUpdate.json();
+
+                showAlert({
+                  title: updated.status === "success" ? "Berhasil" : "Gagal",
+                  text: updated.message,
+                  icon: updated.status,
+                });
+
+                if (updated.status === "success") {
+                  form.reset();
+                  setTimeout(() => {
+                    window.location.href = "/penjadwalan";
+                  }, 1200);
+                }
+              } else {
+                showAlert({
+                  title: "Info",
+                  text: "Jadwal tetap sesuai request awal",
+                  icon: "info",
+                });
+              }
+            });
+          }
+        } else {
+          // Normal flow jika sukses tanpa konflik
+          showAlert({
+            title: result.status === "success" ? "Berhasil" : "Gagal",
+            text: result.message,
+            icon: result.status,
+          });
+
+          if (result.status === "success") {
+            form.reset();
+            setTimeout(() => {
+              window.location.href = "/penjadwalan";
+            }, 1200);
+          }
+        }
+      } catch (err) {
+        showAlert({
+          title: "Error",
+          text: "Terjadi kesalahan saat mengirim data",
+          icon: "error",
+        });
+      } finally {
+        loadingSpinner.classList.add("d-none");
+        submitButton.disabled = false;
+      }
+    });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const tbody = document.getElementById("jadwalTable");
+    const addRowBtn = document.getElementById("addRow");
+
+    if (!tbody) return;
+
+    // Ambil master options satu kali dari select pertama (sumber data)
+    const firstSelect = tbody.querySelector("select.perangkat");
+    if (!firstSelect) return;
+    const masterOptions = Array.from(firstSelect.options).map((opt) => ({
+      value: opt.value,
+      text: opt.text,
+      daya: opt.getAttribute("data-daya") || "",
+      tipe: opt.getAttribute("data-tipe") || "",
+      skor: opt.getAttribute("data-skor") || "",
+    }));
+
+    // Build HTML untuk select (menggunakan masterOptions), optional selectedValue
+    function buildSelectHTML(selectedValue = "") {
+      let html = '<option value="">-- Pilih --</option>';
+      masterOptions.forEach((opt) => {
+        if (!opt.value) return; // skip placeholder if any
+        html += `<option value="${opt.value}" data-daya="${
+          opt.daya
+        }" data-tipe="${opt.tipe}" data-skor="${opt.skor}" ${
+          opt.value === selectedValue ? "selected" : ""
+        }>${opt.text}</option>`;
+      });
+      return html;
+    }
+
+    // Update nomor baris (No)
+    function updateRowNumbers() {
+      Array.from(tbody.querySelectorAll("tr")).forEach((row, i) => {
+        const noCell = row.querySelector("td");
+        if (noCell) noCell.textContent = i + 1;
+      });
+    }
+
+    // Rebuild opsi select untuk setiap row berdasarkan masterOptions
+    function syncOptions() {
+      const selectedValues = Array.from(
+        tbody.querySelectorAll("select.perangkat")
+      )
+        .map((s) => s.value)
+        .filter(Boolean);
+
+      tbody.querySelectorAll("select.perangkat").forEach((select) => {
+        const current = select.value;
+        // Kosongkan dan rebuild dari masterOptions
+        select.innerHTML = '<option value="">-- Pilih --</option>';
+        masterOptions.forEach((opt) => {
+          if (!opt.value) return;
+          // jika opt sudah dipilih di baris lain, skip; kecuali ini adalah nilai current select
+          if (selectedValues.includes(opt.value) && opt.value !== current)
+            return;
+          const newOpt = document.createElement("option");
+          newOpt.value = opt.value;
+          newOpt.textContent = opt.text;
+          newOpt.setAttribute("data-daya", opt.daya);
+          newOpt.setAttribute("data-tipe", opt.tipe);
+          newOpt.setAttribute("data-skor", opt.skor);
+          if (opt.value === current) newOpt.selected = true;
+          select.appendChild(newOpt);
+        });
+      });
+
+      updateRowNumbers();
+    }
+
+    // Hitung total daya (daya * durasi jam)
+    function calcTotalForRow(row) {
+      const daya =
+        parseFloat((row.querySelector(".daya") || { value: 0 }).value) || 0;
+      const jamMulai = (row.querySelector(".jam_mulai") || { value: "" }).value;
+      const jamSelesai = (row.querySelector(".jam_selesai") || { value: "" })
+        .value;
+
+      if (!jamMulai || !jamSelesai) {
+        (row.querySelector(".total_daya") || { value: "" }).value = "";
+        return;
+      }
+      const [h1, m1] = jamMulai.split(":").map(Number);
+      const [h2, m2] = jamSelesai.split(":").map(Number);
+      const durasi = h2 + m2 / 60 - (h1 + m1 / 60);
+      const total = durasi > 0 ? daya * durasi : 0;
+      (row.querySelector(".total_daya") || {}).value = isFinite(total)
+        ? total.toFixed(2)
+        : "";
+    }
+
+    // Buat baris baru (element <tr>)
+    function createRow() {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+      <td></td>
+      <td>
+        <select name="perangkat_id" class="form-select perangkat" required>
+          ${buildSelectHTML("")}
+        </select>
+      </td>
+      <td><input type="text" class="form-control daya" name="daya_watt" readonly /></td>
+      <td><input type="text" class="form-control tanggal_range" name="tanggal_range" placeholder="Pilih rentang tanggal" required /></td>
+      <td><input type="time" class="form-control jam_mulai" name="jam_mulai" required /></td>
+      <td><input type="time" class="form-control jam_selesai" name="jam_selesai" required /></td>
+      <td><input type="text" class="form-control tipe" name="tipe" readonly /></td>
+      <td><input type="text" class="form-control skor" name="skor_prioritas" readonly /></td>
+      <td><input type="text" class="form-control total_daya" name="total_daya" readonly /></td>
+      <td><button type="button" class="btn btn-danger btn-sm deleteRow"><i class="bi bi-trash"></i></button></td>
+    `;
+      return tr;
+    }
+
+    // Inisialisasi flatpickr pada elemen tanggal_range (jika flatpickr ada)
+    function initDateRange(elem) {
+      if (typeof flatpickr === "function") {
+        flatpickr(elem, {
+          mode: "range",
+          dateFormat: "Y-m-d",
+          minDate: "today",
+        });
+      }
+    }
+
+    // --- Event delegation untuk select change & input perubahan ---
+    tbody.addEventListener("change", (e) => {
+      const tgt = e.target;
+      const row = tgt.closest("tr");
+      if (!row) return;
+
+      // Pilih perangkat -> set daya, tipe, skor
+      if (tgt.classList.contains("perangkat")) {
+        const option = tgt.options[tgt.selectedIndex];
+        const dayaVal = option ? option.getAttribute("data-daya") || "" : "";
+        const tipeVal = option ? option.getAttribute("data-tipe") || "" : "";
+        let skorVal = option ? option.getAttribute("data-skor") || "" : "";
+
+        // pastikan skor pakai titik, bukan koma
+        skorVal = skorVal.toString().replace(",", ".");
+
+        row.querySelector(".daya").value = dayaVal;
+        row.querySelector(".tipe").value = tipeVal;
+        row.querySelector(".skor").value = skorVal;
+
+        // recalc total (daya mungkin berubah)
+        calcTotalForRow(row);
+
+        // rebuild opsi di semua select (menghilangkan yg sudah dipilih)
+        syncOptions();
+      }
+    });
+
+    tbody.addEventListener("input", (e) => {
+      const tgt = e.target;
+      const row = tgt.closest("tr");
+      if (!row) return;
+
+      if (
+        tgt.classList.contains("jam_mulai") ||
+        tgt.classList.contains("jam_selesai") ||
+        tgt.classList.contains("daya")
+      ) {
+        calcTotalForRow(row);
+      }
+    });
+
+    // Hapus baris
+    tbody.addEventListener("click", (e) => {
+      if (e.target.closest(".deleteRow")) {
+        const row = e.target.closest("tr");
+        if (!row) return;
+        // minimal 1 baris tersisa
+        if (tbody.querySelectorAll("tr").length > 1) {
+          row.remove();
+          syncOptions();
+        } else {
+          // jika hanya 1 baris, hanya reset input
+          row.querySelectorAll("input").forEach((i) => (i.value = ""));
+          row.querySelector("select.perangkat").value = "";
+          syncOptions();
+        }
+      }
+    });
+
+    // Tombol tambah baris -> tambahkan sebelum tombol footer (append ke tbody)
+    addRowBtn &&
+      addRowBtn.addEventListener("click", () => {
+        const newRow = createRow();
+        tbody.appendChild(newRow);
+        // initialize date range (flatpickr) pada input baru jika ada
+        const trTanggal = newRow.querySelector(".tanggal_range");
+        if (trTanggal) initDateRange(trTanggal);
+
+        syncOptions();
+        // fokus ke select baru
+        const firstSelect = newRow.querySelector("select.perangkat");
+        if (firstSelect) firstSelect.focus();
+      });
+
+    // Inisialisasi: pastikan semua tanggal_range existing diinisialisasi
+    tbody.querySelectorAll(".tanggal_range").forEach(initDateRange);
+
+    // Jalankan sinkronisasi awal (jika ada preselected)
+    syncOptions();
+  });
+</script>
